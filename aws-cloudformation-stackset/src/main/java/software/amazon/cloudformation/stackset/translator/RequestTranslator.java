@@ -11,13 +11,18 @@ import software.amazon.awssdk.services.cloudformation.model.GetTemplateSummaryRe
 import software.amazon.awssdk.services.cloudformation.model.ListStackInstancesRequest;
 import software.amazon.awssdk.services.cloudformation.model.ListStackSetOperationResultsRequest;
 import software.amazon.awssdk.services.cloudformation.model.ListStackSetsRequest;
+import software.amazon.awssdk.services.cloudformation.model.Tag;
 import software.amazon.awssdk.services.cloudformation.model.UpdateStackInstancesRequest;
 import software.amazon.awssdk.services.cloudformation.model.UpdateStackSetRequest;
 import software.amazon.cloudformation.stackset.OperationPreferences;
 import software.amazon.cloudformation.stackset.ResourceModel;
 import software.amazon.cloudformation.stackset.StackInstances;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import static software.amazon.awssdk.services.cloudformation.model.StackSetStatus.ACTIVE;
 import static software.amazon.cloudformation.stackset.translator.PropertyTranslator.translateToSdkAutoDeployment;
@@ -106,7 +111,17 @@ public class RequestTranslator {
 
     public static UpdateStackSetRequest updateStackSetRequest(
             final ResourceModel model,
-            final Map<String, String> tags) {
+            final Map<String, String> previousTags,
+            final Map<String, String> tags,
+            final List<Tag> currentTags) {
+        // Aggregate all current tags
+        Set<Tag> allTags = new HashSet<>(currentTags);
+        Set<Tag> currentTagSet = translateToSdkTags(tags);
+        allTags.addAll(currentTagSet);
+        // Remove the one's that were in the previousTags but not in tags
+        Set<Tag> previousTagSet = translateToSdkTags(previousTags);
+        previousTagSet.removeAll(currentTagSet);
+        allTags.removeAll(previousTagSet);
         return UpdateStackSetRequest.builder()
                 .stackSetName(model.getStackSetId())
                 .administrationRoleARN(model.getAdministrationRoleARN())
@@ -118,7 +133,7 @@ public class RequestTranslator {
                 .parameters(translateToSdkParameters(model.getParameters()))
                 .templateURL(model.getTemplateURL())
                 .templateBody(model.getTemplateBody())
-                .tags(translateToSdkTags(tags))
+                .tags(allTags)
                 .callAs(model.getCallAs())
                 .build();
     }
@@ -200,16 +215,16 @@ public class RequestTranslator {
     }
 
     public static ListStackSetOperationResultsRequest listStackSetOperationResultsRequest(
-        final String nextToken,
-        final String stackSetName,
-        final String operationId,
-        final String callAs) {
+            final String nextToken,
+            final String stackSetName,
+            final String operationId,
+            final String callAs) {
         return ListStackSetOperationResultsRequest.builder()
-            .maxResults(LIST_MAX_ITEMS)
-            .nextToken(nextToken)
-            .stackSetName(stackSetName)
-            .operationId(operationId)
-            .callAs(callAs)
-            .build();
+                .maxResults(LIST_MAX_ITEMS)
+                .nextToken(nextToken)
+                .stackSetName(stackSetName)
+                .operationId(operationId)
+                .callAs(callAs)
+                .build();
     }
 }
