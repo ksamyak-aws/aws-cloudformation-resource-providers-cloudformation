@@ -18,6 +18,7 @@ import software.amazon.cloudformation.stackset.OperationPreferences;
 import software.amazon.cloudformation.stackset.ResourceModel;
 import software.amazon.cloudformation.stackset.StackInstances;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -114,14 +115,24 @@ public class RequestTranslator {
             final Map<String, String> previousTags,
             final Map<String, String> tags,
             final List<Tag> currentTags) {
-        // Aggregate all current tags
-        Set<Tag> allTags = new HashSet<>(currentTags);
-        Set<Tag> currentTagSet = translateToSdkTags(tags);
-        allTags.addAll(currentTagSet);
-        // Remove the one's that were in the previousTags but not in tags
-        Set<Tag> previousTagSet = translateToSdkTags(previousTags);
-        previousTagSet.removeAll(currentTagSet);
-        allTags.removeAll(previousTagSet);
+        Set<Tag> activeStackSetTags = new HashSet<>(currentTags);
+        Set<Tag> templateStackSetTags = translateToSdkTags(tags);
+        Set<Tag> previousTemplateTagSet = translateToSdkTags(previousTags);
+        // Construct out-of-band tag set by performing a set difference of active tags and tags from previous model
+        Set<Tag> outOfBandTags = new HashSet<>(activeStackSetTags);
+        outOfBandTags.removeAll(previousTemplateTagSet);
+
+        Set<Tag> tagsToSet = new HashSet<>(templateStackSetTags);
+        // if the out of band tag doesn't already exist in tagsToSet, add it
+        Set<String> targetTagKeys = tagsToSet.stream().map(Tag::key).collect(Collectors.toSet());
+        Set<String> outOfBandTagKeys = outOfBandTags.stream().map(Tag::key).collect(Collectors.toSet());
+        Map<String, Tag> outOfBandTagMap = getTagMapFromSet(outOfBandTags);
+        for (String tagKey: outOfBandTagKeys) {
+            if (!targetTagKeys.contains(tagKey)) {
+                tagsToSet.add(outOfBandTagMap.get(tagKey));
+            }
+        }
+
         return UpdateStackSetRequest.builder()
                 .stackSetName(model.getStackSetId())
                 .administrationRoleARN(model.getAdministrationRoleARN())
@@ -133,9 +144,17 @@ public class RequestTranslator {
                 .parameters(translateToSdkParameters(model.getParameters()))
                 .templateURL(model.getTemplateURL())
                 .templateBody(model.getTemplateBody())
-                .tags(allTags)
+                .tags(tagsToSet)
                 .callAs(model.getCallAs())
                 .build();
+    }
+
+    private static Map<String, Tag> getTagMapFromSet(Set<Tag> tagSet) {
+        Map<String, Tag> tagSetToMap = new HashMap<>();
+        tagSet.forEach(tag -> {
+            tagSetToMap.put(tag.key(), tag);
+        });
+        return tagSetToMap;
     }
 
     public static UpdateStackSetRequest updateManagedExecutionRequest(
