@@ -122,7 +122,7 @@ public class RequestTranslator {
         Set<Tag> outOfBandTags = new HashSet<>(activeStackSetTags);
         outOfBandTags.removeAll(previousTemplateTagSet);
 
-        // if the out of band tag doesn't already exist in tagsToSet, add it
+        // if the out of band tag doesn't already exist in tagsToSet add it
         Set<String> templateTagKeys = templateStackSetTags.stream().map(Tag::key).collect(Collectors.toSet());
         Set<String> outOfBandTagKeys = outOfBandTags.stream().map(Tag::key).collect(Collectors.toSet());
         Map<String, Tag> outOfBandTagMap = getTagMapFromSet(outOfBandTags);
